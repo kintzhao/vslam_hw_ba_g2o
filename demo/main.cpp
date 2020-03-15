@@ -271,7 +271,7 @@ int main()
         // window.setRenderingProperty("cloud", cv::viz::POINT_SIZE, 3.0);
     }
 
-#if 1
+#if 0
     /* show camera gt trajectory */
     for (size_t i = 0; i < pose_num-1; i++)
     {
@@ -436,11 +436,30 @@ int main()
             frame_curr.Twc_.block(0, 0, 3, 3) = R.transpose();
             frame_curr.Twc_.block(0, 3, 3, 1) = -R.transpose() * t;
 
+             std::cout<<"==> t: "<<t<<std::endl;
             /* create new mappoints */
             // TODO homework
             // cv::Mat cv_P1, cv_P2;
             // cv_P1=...
             // cv_P2=...
+            Eigen::Matrix4d T21 = frame_curr.Twc_.inverse()*frame_last.Twc_;
+            Eigen::Matrix3d R_eig = T21.block(0, 0, 3, 3);
+            Eigen::Vector3d t_eig = T21.block(0, 3, 3, 1);
+
+            cv::Mat R21, t21;
+            cv::eigen2cv(R_eig, R21);
+            cv::eigen2cv(t_eig, t21);
+
+            /* create mappoints */
+            cv::Mat cv_P1(3,4,CV_32F,cv::Scalar(0));
+            cv_K.copyTo(cv_P1.rowRange(0,3).colRange(0,3));
+
+            cv::Mat cv_P2(3,4,CV_32F);
+            R21.copyTo(cv_P2.rowRange(0,3).colRange(0,3));
+            t21.copyTo(cv_P2.rowRange(0,3).col(3));
+            cv::Mat temp_K;
+            cv_K.convertTo(temp_K, CV_32F);
+            cv_P2 = temp_K*cv_P2;
 
             for (size_t n = 0; n < matches.size(); n++)
             {
@@ -463,7 +482,11 @@ int main()
                 // ...
                 // TwoViewGeometry::Triangulate(...);
                 // remove the 'continue'
-                continue;
+                //continue;
+                cv::Point2f pt1(frame_last.fts_[idx_last].x(), frame_last.fts_[idx_last].y());
+                cv::Point2f pt2(frame_curr.fts_[idx_curr].x(), frame_curr.fts_[idx_curr].y());
+                TwoViewGeometry::Triangulate(pt1, pt2, cv_P1, cv_P2, p3d_c1);
+
 
                 if(!std::isfinite(p3d_c1.at<float>(0)) ||
                     !std::isfinite(p3d_c1.at<float>(1)) ||

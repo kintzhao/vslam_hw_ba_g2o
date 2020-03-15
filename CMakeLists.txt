@@ -3,7 +3,7 @@ project(vo_simulate)
 
 add_definitions(-DWORKSPACE_DIR="${CMAKE_SOURCE_DIR}")
 
-set(CMAKE_BUILD_TYPE release)
+set(CMAKE_BUILD_TYPE debug)
 set(CMAKE_CXX_FLAGS "-std=c++11")
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}  -Wall -O0 -march=native ")
