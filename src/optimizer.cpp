@@ -14,7 +14,7 @@ void two_view_ba(Frame &frame_last, Frame &frame_curr, LoaclMap &map, std::vecto
 {
     // TODO homework
     // after you complete this funtion, remove the "return"
-    return;
+    //return;
 
     const double fx = frame_last.K_(0, 0);
     const double fy = frame_last.K_(1, 1);
@@ -40,15 +40,35 @@ void two_view_ba(Frame &frame_last, Frame &frame_curr, LoaclMap &map, std::vecto
 
     int frame_id_last = frame_last.idx_;
     int frame_id_curr = frame_curr.idx_;
+    //std::cout<<"frame_id_last:"<<frame_id_last<<"  frame_id_curr:"<<frame_id_curr<<std::endl;
     // TODO homework
     // add frame pose Vertex to optimizer
-    // example: 
+    // example:
     // g2o::VertexSE3Expmap * vSE3 = new g2o::VertexSE3Expmap();
     // ...
     // optimizer.addVertex(vSE3);
+
+    g2o::VertexSE3Expmap *last_SE3 = new g2o::VertexSE3Expmap();
+    last_SE3->setEstimate(Converter::toSE3Quat(last_Tcw));
+    last_SE3->setId(frame_id_last);
+    if (frame_id_last == 1)
+        last_SE3->setFixed(true);
+    else
     {
-       
+        last_SE3->setFixed(false);
     }
+    optimizer.addVertex(last_SE3);
+
+    g2o::VertexSE3Expmap *curr_SE3 = new g2o::VertexSE3Expmap();
+    curr_SE3->setEstimate(Converter::toSE3Quat(curr_Tcw));
+    curr_SE3->setId(frame_id_curr);
+    if (frame_id_curr == 1)
+        curr_SE3->setFixed(true);
+    else
+    {
+        curr_SE3->setFixed(false);
+    }
+    optimizer.addVertex(curr_SE3);
 
     const float thHuber2D = sqrt(5.99);
     const float thHuber3D = sqrt(7.815);
@@ -73,23 +93,63 @@ void two_view_ba(Frame &frame_last, Frame &frame_curr, LoaclMap &map, std::vecto
 
         // TODO homework
         // add mappoint Vertex to optimizer
-        // example: 
+        // example:
         // g2o::VertexSBAPointXYZ * vPoint = new g2o::VertexSBAPointXYZ();
         // ...
         // optimizer.addVertex(vPoint);
-        {
-        
-        }
-        
+
+        g2o::VertexSBAPointXYZ* vPoint = new g2o::VertexSBAPointXYZ();
+        vPoint->setEstimate(mpt);
+        const int id = idx_mpt+max_frame_id;
+        //std::cout<<"matches:"<<i<<"  id:"<<id<<std::endl;
+        vPoint->setId(id);
+        vPoint->setMarginalized(true);
+        optimizer.addVertex(vPoint);
+
         // TODO homework
         // add edage to optimizer
-        // example: 
+        // example:
         // g2o::EdgeSE3ProjectXYZ* e = new g2o::EdgeSE3ProjectXYZ();
         // ...
         // optimizer.addEdge(e);
-        {
 
+        const float invSigma2 = 1.0;
+        g2o::EdgeSE3ProjectXYZ *e_last = new g2o::EdgeSE3ProjectXYZ();
+        e_last->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(id)));
+        e_last->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(frame_id_last)));
+
+        e_last->setMeasurement(features_last[idx_last].cast<double>());
+        e_last->setInformation(Eigen::Matrix2d::Identity() * invSigma2);
+        if (bRobust)
+        {
+            g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
+            e_last->setRobustKernel(rk);
+            rk->setDelta(thHuber2D);
         }
+        e_last->fx = fx;
+        e_last->fy = fy;
+        e_last->cx = cx;
+        e_last->cy = cy;
+        optimizer.addEdge(e_last);
+
+        //
+        g2o::EdgeSE3ProjectXYZ *e_curr = new g2o::EdgeSE3ProjectXYZ();
+        e_curr->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(id)));
+        e_curr->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(frame_id_curr)));
+
+        e_curr->setMeasurement(features_curr[idx_curr].cast<double>());
+        e_curr->setInformation(Eigen::Matrix2d::Identity() * invSigma2);
+        if (bRobust)
+        {
+            g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
+            e_curr->setRobustKernel(rk);
+            rk->setDelta(thHuber2D);
+        }
+        e_curr->fx = fx;
+        e_curr->fy = fy;
+        e_curr->cx = cx;
+        e_curr->cy = cy;
+        optimizer.addEdge(e_curr);
     }
 
     // Optimize!
@@ -100,10 +160,18 @@ void two_view_ba(Frame &frame_last, Frame &frame_curr, LoaclMap &map, std::vecto
     // Recover optimized data
     // Frame Pose
     {
-        frame_last.Twc_ = frame_last.Twc_;
-        frame_curr.Twc_ = frame_curr.Twc_;
+        g2o::VertexSE3Expmap *vSE3 = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(frame_id_last));
+        g2o::SE3Quat SE3quat = vSE3->estimate();
+        frame_last.Twc_ = Converter::toEigenMat(SE3quat);
     }
-    
+
+    {
+        g2o::VertexSE3Expmap *vSE3 = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(frame_id_curr));
+        g2o::SE3Quat SE3quat = vSE3->estimate();
+        frame_last.Twc_ = Converter::toEigenMat(SE3quat);
+    }
+
+
     // Points
     for(size_t i = 0; i < matches.size(); i++)
     {
@@ -112,7 +180,9 @@ void two_view_ba(Frame &frame_last, Frame &frame_curr, LoaclMap &map, std::vecto
         int32_t idx_mpt = frame_last.mpt_track_[idx_last];
 
         Eigen::Vector3d &mpt = map.mpts_[idx_mpt];
+        //std::cout<<"matches:"<<i<<"  id:"<<idx_mpt+max_frame_id<<std::endl;
+        g2o::VertexSBAPointXYZ* vPoint = static_cast<g2o::VertexSBAPointXYZ*>(optimizer.vertex(idx_mpt+max_frame_id));
 
-        mpt = mpt;
+        mpt = vPoint->estimate();
     }
 }
