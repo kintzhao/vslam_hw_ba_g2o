@@ -101,10 +101,9 @@ std::vector<FMatch> feature_match(const Frame &frame1, const Frame &frame2, floa
     return matches;
 }
 
-
 void outlier_rejection(Frame &frame_last,Frame &frame_curr, LoaclMap &map, std::vector<FMatch> &matches)
 {
-    const double sigma = 0.99998;//1.0;
+    const double sigma = 1.0;
     const double thr = sigma * 4;
     std::list<double> rpj_err;
     for (size_t n = 0; n < matches.size(); n++)
@@ -116,55 +115,11 @@ void outlier_rejection(Frame &frame_last,Frame &frame_curr, LoaclMap &map, std::
         if (mpt_idx < 0) { continue; }
         Eigen::Vector3d &mpt = map.mpts_[mpt_idx];
         // TODO homework
+        // ....
         // if (...)
         // {
         //     matches[n].outlier = true;
         // }
-
-        // Check parallax
-        Eigen::Vector3d normal1 = mpt - frame_last.Twc_.block(0, 3, 3, 1);
-        float dist1 = normal1.norm();
-
-        Eigen::Vector3d normal2 = mpt - frame_curr.Twc_.block(0, 3, 3, 1);
-        float dist2 = normal2.norm();
-
-        float cosParallax = normal1.dot(normal2)/(dist1*dist2);
-
-        Eigen::Vector3d p3dC1 = frame_last.Twc_.block(0,0,3,3).inverse()*(mpt - frame_last.Twc_.block(0,3,3,1));
-        // Check depth in front of first camera (only if enough parallax, as "infinite" points can easily go to negative depth)
-        if(p3dC1.z()<=0 && cosParallax<sigma)
-        {
-             matches[n].outlier = true;
-             continue;
-        }
-
-        Eigen::Vector3d p3dC2 = frame_curr.Twc_.block(0,0,3,3).inverse()*(mpt - frame_curr.Twc_.block(0,3,3,1));
-        // Check depth in front of second camera (only if enough parallax, as "infinite" points can easily go to negative depth)
-        if(p3dC2.z()<=0 && cosParallax<sigma)
-        {
-             matches[n].outlier = true;
-             continue;
-        }
-
-        Eigen::Vector2i last_uv = frame_last.fts_[idx_last];
-        Eigen::Vector2i uv_diff1 = last_uv - Eigen::Vector2i(p3dC1.x(), p3dC1.y());
-        float squareError1 = uv_diff1.squaredNorm();
-        if(squareError1>thr)
-        {
-             matches[n].outlier = true;
-             continue;
-        }
-
-        Eigen::Vector2i curr_uv = frame_curr.fts_[idx_last];
-        Eigen::Vector2i uv_diff2 = curr_uv - Eigen::Vector2i(p3dC2.x(), p3dC2.y());
-        float squareError2 = uv_diff2.squaredNorm();
-        if(squareError2>thr)
-        {
-             matches[n].outlier = true;
-             continue;
-        }
-
-        matches[n].outlier = false;
     }
 
     for (size_t n = 0; n < matches.size(); n++)
