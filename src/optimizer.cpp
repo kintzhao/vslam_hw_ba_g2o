@@ -14,7 +14,7 @@ void two_view_ba(Frame &frame_last, Frame &frame_curr, LoaclMap &map, std::vecto
 {
     // TODO homework
     // after you complete this funtion, remove the "return"
-    return;
+    //return;
 
     const double fx = frame_last.K_(0, 0);
     const double fy = frame_last.K_(1, 1);
