@@ -115,7 +115,7 @@ void outlier_rejection(Frame &frame_last,Frame &frame_curr, LoaclMap &map, std::
 
         if (mpt_idx < 0) { continue; }
         Eigen::Vector3d &mpt = map.mpts_[mpt_idx];
-        continue;
+        //continue;
         // TODO homework
         // if (...)
         // {
