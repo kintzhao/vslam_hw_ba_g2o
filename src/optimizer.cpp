@@ -34,6 +34,8 @@ void two_view_ba(Frame &frame_last, Frame &frame_curr, LoaclMap &map, std::vecto
     // Set vertices
     Eigen::Matrix4d last_Tcw = frame_last.Twc_.inverse();
     Eigen::Matrix4d curr_Tcw = frame_curr.Twc_.inverse();
+    //std::cout<<"last:    "<<std::endl;std::cout<<frame_last.Twc_<<std::endl;
+    //std::cout<<"current: "<<std::endl;std::cout<<frame_curr.Twc_<<std::endl;
 
     const std::vector<Eigen::Vector2i> &features_last = frame_last.fts_;
     const std::vector<Eigen::Vector2i> &features_curr = frame_curr.fts_;
@@ -51,8 +53,11 @@ void two_view_ba(Frame &frame_last, Frame &frame_curr, LoaclMap &map, std::vecto
     g2o::VertexSE3Expmap *last_SE3 = new g2o::VertexSE3Expmap();
     last_SE3->setEstimate(Converter::toSE3Quat(last_Tcw));
     last_SE3->setId(frame_id_last);
-    if (frame_id_last == 1)
+    if (frame_id_last == 0)
+    {
         last_SE3->setFixed(true);
+        //std::cout<<" fixed last_SE3" <<std::endl;
+    }
     else
     {
         last_SE3->setFixed(false);
@@ -62,8 +67,11 @@ void two_view_ba(Frame &frame_last, Frame &frame_curr, LoaclMap &map, std::vecto
     g2o::VertexSE3Expmap *curr_SE3 = new g2o::VertexSE3Expmap();
     curr_SE3->setEstimate(Converter::toSE3Quat(curr_Tcw));
     curr_SE3->setId(frame_id_curr);
-    if (frame_id_curr == 1)
+    if (frame_id_curr == 0)
+    {
         curr_SE3->setFixed(true);
+        //std::cout<<" fixed last_SE3" <<std::endl;
+    }
     else
     {
         curr_SE3->setFixed(false);
@@ -100,7 +108,7 @@ void two_view_ba(Frame &frame_last, Frame &frame_curr, LoaclMap &map, std::vecto
 
         g2o::VertexSBAPointXYZ* vPoint = new g2o::VertexSBAPointXYZ();
         vPoint->setEstimate(mpt);
-        const int id = idx_mpt+max_frame_id;
+        const int id = i+max_frame_id;//idx_mpt+max_frame_id;
         //std::cout<<"matches:"<<i<<"  id:"<<id<<std::endl;
         vPoint->setId(id);
         vPoint->setMarginalized(true);
@@ -162,13 +170,15 @@ void two_view_ba(Frame &frame_last, Frame &frame_curr, LoaclMap &map, std::vecto
     {
         g2o::VertexSE3Expmap *vSE3 = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(frame_id_last));
         g2o::SE3Quat SE3quat = vSE3->estimate();
-        frame_last.Twc_ = Converter::toEigenMat(SE3quat);
+        std::cout<<"frame_id_last:"<<frame_id_last<<" "<<vSE3->fixed()<<std::endl;
+        frame_last.Twc_ = Converter::toEigenMat(SE3quat).inverse();
     }
 
     {
         g2o::VertexSE3Expmap *vSE3 = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(frame_id_curr));
         g2o::SE3Quat SE3quat = vSE3->estimate();
-        frame_last.Twc_ = Converter::toEigenMat(SE3quat);
+        std::cout<<"frame_id_curr:"<<frame_id_curr<<" "<<vSE3->fixed()<<std::endl;
+        frame_curr.Twc_ = Converter::toEigenMat(SE3quat).inverse();
     }
 
 
@@ -181,7 +191,7 @@ void two_view_ba(Frame &frame_last, Frame &frame_curr, LoaclMap &map, std::vecto
 
         Eigen::Vector3d &mpt = map.mpts_[idx_mpt];
         //std::cout<<"matches:"<<i<<"  id:"<<idx_mpt+max_frame_id<<std::endl;
-        g2o::VertexSBAPointXYZ* vPoint = static_cast<g2o::VertexSBAPointXYZ*>(optimizer.vertex(idx_mpt+max_frame_id));
+        g2o::VertexSBAPointXYZ* vPoint = static_cast<g2o::VertexSBAPointXYZ*>(optimizer.vertex(i+max_frame_id/*idx_mpt+max_frame_id*/));
 
         mpt = vPoint->estimate();
     }

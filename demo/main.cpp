@@ -103,7 +103,7 @@ std::vector<FMatch> feature_match(const Frame &frame1, const Frame &frame2, floa
 
 void outlier_rejection(Frame &frame_last,Frame &frame_curr, LoaclMap &map, std::vector<FMatch> &matches)
 {
-    const double sigma = 1.0;
+    const double sigma = 0.99998;//1.0;
     const double thr = sigma * 4;
     std::list<double> rpj_err;
     for (size_t n = 0; n < matches.size(); n++)
@@ -115,11 +115,66 @@ void outlier_rejection(Frame &frame_last,Frame &frame_curr, LoaclMap &map, std::
         if (mpt_idx < 0) { continue; }
         Eigen::Vector3d &mpt = map.mpts_[mpt_idx];
         // TODO homework
-        // ....
         // if (...)
         // {
         //     matches[n].outlier = true;
         // }
+
+        // Check parallax
+        Eigen::Vector3d normal1 = mpt - frame_last.Twc_.block(0, 3, 3, 1);
+        float dist1 = normal1.norm();
+
+        Eigen::Vector3d normal2 = mpt - frame_curr.Twc_.block(0, 3, 3, 1);
+        float dist2 = normal2.norm();
+
+        float cosParallax = normal1.dot(normal2)/(dist1*dist2);
+
+        Eigen::Vector3d p3dC1 = frame_last.Twc_.block(0,0,3,3).transpose()*(mpt - frame_last.Twc_.block(0,3,3,1));
+
+        // Check depth in front of first camera (only if enough parallax, as "infinite" points can easily go to negative depth)
+        if(p3dC1.z()<=0 && cosParallax<sigma)
+        {
+             matches[n].outlier = true;
+             continue;
+        }
+
+        Eigen::Vector3d p3dC2 = frame_curr.Twc_.block(0,0,3,3).transpose()*(mpt - frame_curr.Twc_.block(0,3,3,1));
+        // Check depth in front of second camera (only if enough parallax, as "infinite" points can easily go to negative depth)
+        if(p3dC2.z()<=0 && cosParallax<sigma)
+        {
+             matches[n].outlier = true;
+             continue;
+        }
+
+        float im1x, im1y;
+        float invZ1 = 1.0/p3dC1.z();
+        im1x = frame_last.K_(0, 0)*p3dC1.x()*invZ1+frame_last.K_(0, 2);
+        im1y = frame_last.K_(1, 1)*p3dC1.y()*invZ1+frame_last.K_(1, 2);
+
+        float squareError1 = (im1x-frame_last.fts_[idx_last].x())*(im1x-frame_last.fts_[idx_last].x())
+                +(im1y-frame_last.fts_[idx_last].y())*(im1y-frame_last.fts_[idx_last].y());
+
+        if(squareError1>thr)
+        {
+             matches[n].outlier = true;
+             continue;
+        }
+
+        float im2x, im2y;
+        float invZ2 = 1.0/p3dC2.z();
+        im2x = frame_curr.K_(0, 0)*p3dC2.x()*invZ2+frame_curr.K_(0, 2);
+        im2y = frame_curr.K_(1, 1)*p3dC2.y()*invZ2+frame_curr.K_(1, 2);
+
+        float squareError2 = (im2x-frame_curr.fts_[idx_curr].x())*(im2x-frame_curr.fts_[idx_curr].x())
+                + (im2y-frame_curr.fts_[idx_curr].y())*(im2y-frame_curr.fts_[idx_curr].y());
+
+        if(squareError2>thr)
+        {
+             matches[n].outlier = true;
+             continue;
+        }
+
+        matches[n].outlier = false;
     }
 
     for (size_t n = 0; n < matches.size(); n++)
@@ -131,6 +186,7 @@ void outlier_rejection(Frame &frame_last,Frame &frame_curr, LoaclMap &map, std::
         }
     }
 }
+
 
 bool createInitMap(Frame &frame_last, Frame &frame_curr, LoaclMap &map, std::vector<FMatch> &matches)
 {
@@ -225,7 +281,11 @@ bool createInitMap(Frame &frame_last, Frame &frame_curr, LoaclMap &map, std::vec
     frame_last.Twc_ = Eigen::Matrix4d::Identity();
     frame_curr.Twc_ = frame_last.Twc_ * T_curr_last.inverse();
     outlier_rejection(frame_last, frame_curr, map, matches);
+    //std::cout<<"createInitMap::"<<std::endl;
     two_view_ba(frame_last, frame_curr, map, matches);
+    //std::cout<<"createInitMap ==> last:    "<<frame_last.Twc_<<std::endl;
+    //std::cout<<"createInitMap ==> current: "<<frame_curr.Twc_<<std::endl;
+
     outlier_rejection(frame_last, frame_curr, map, matches);
 
     return true;
@@ -271,7 +331,7 @@ int main()
         // window.setRenderingProperty("cloud", cv::viz::POINT_SIZE, 3.0);
     }
 
-#if 0
+#if 1
     /* show camera gt trajectory */
     for (size_t i = 0; i < pose_num-1; i++)
     {
@@ -281,6 +341,7 @@ int main()
         cv::Point3d pose_end(twc1[0], twc1[1], twc1[2]);
         cv::viz::WLine trag_line(pose_begin, pose_end, cv::viz::Color::green());
         window.showWidget("gt_trag_"+std::to_string(i), trag_line);
+        //std::cout<<"i: "<<i<<" t: "<<twc0<<std::endl;
     }
 
     static const Eigen::Vector3d cam_z_dir(0, 0, 1);
@@ -320,6 +381,7 @@ int main()
     LoaclMap map(landmarks.size());
     for (size_t i = 1; i < pose_num; i++)
     {
+        //std::cout<<" ===============> pose_num:  "<<i<<std::endl;
         /* get features of current frame */
         Frame &frame_last = frames.back();
         Frame frame_curr(i, landmarks.size(), K);
@@ -330,7 +392,7 @@ int main()
         std::vector<FMatch> matches = feature_match(frame_curr, frame_last, 0.0);
         assert(!matches.empty());
 
-        std::cout << "[" << std::setw(3) << frame_curr.idx_ << "] match features " << matches.size() << std::endl;
+        //std::cout << "[" << std::setw(3) << frame_curr.idx_ << "] match features " << matches.size() << std::endl;
 
         Eigen::Matrix4d Twc_curr;
 
@@ -486,8 +548,6 @@ int main()
                 cv::Point2f pt1(frame_last.fts_[idx_last].x(), frame_last.fts_[idx_last].y());
                 cv::Point2f pt2(frame_curr.fts_[idx_curr].x(), frame_curr.fts_[idx_curr].y());
                 TwoViewGeometry::Triangulate(pt1, pt2, cv_P1, cv_P2, p3d_c1);
-
-
                 if(!std::isfinite(p3d_c1.at<float>(0)) ||
                     !std::isfinite(p3d_c1.at<float>(1)) ||
                     !std::isfinite(p3d_c1.at<float>(2)))
@@ -506,10 +566,13 @@ int main()
             }
             outlier_rejection(frame_last, frame_curr, map, matches);
 
-            std::cout << "[" << std::setw(3) << frame_curr.idx_ << "] inlier landmarks "
-                      << std::count_if(frame_curr.mpt_track_.begin(), frame_curr.mpt_track_.end(), [](int32_t idx){return idx >= 0;}) << std::endl;
+//            std::cout << "[" << std::setw(3) << frame_curr.idx_ << "] inlier landmarks "
+//                      << std::count_if(frame_curr.mpt_track_.begin(), frame_curr.mpt_track_.end(), [](int32_t idx){return idx >= 0;}) << std::endl;
 
             two_view_ba(frame_last, frame_curr, map, matches);
+
+            //std::cout<<"two_view_ba ==> last:    "<<std::endl;std::cout<<frame_last.Twc_<<std::endl;
+            //std::cout<<"two_view_ba ==> current: "<<std::endl;std::cout<<frame_curr.Twc_<<std::endl;
         }
 
 
@@ -553,7 +616,7 @@ int main()
             Eigen::Vector3d twc1 = frame_curr.Twc_.block(0, 3, 3, 1);
             cv::Point3d pose_begin(twc0[0], twc0[1], twc0[2]);
             cv::Point3d pose_end(twc1[0], twc1[1], twc1[2]);
-            cv::viz::WLine trag_line(pose_begin, pose_end, cv::viz::Color(0,255,255));
+            cv::viz::WLine trag_line(pose_begin, pose_end, cv::viz::Color(0,0,255));
             window.showWidget("trag_"+std::to_string(i), trag_line);
 
             Eigen::Matrix3d Rwc1 = frame_curr.Twc_.block(0, 0, 3, 3);
