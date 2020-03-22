@@ -14,7 +14,7 @@ void two_view_ba(Frame &frame_last, Frame &frame_curr, LoaclMap &map, std::vecto
 {
     // TODO homework
     // after you complete this funtion, remove the "return"
-    //return;
+    return;
 
     const double fx = frame_last.K_(0, 0);
     const double fy = frame_last.K_(1, 1);
@@ -53,29 +53,16 @@ void two_view_ba(Frame &frame_last, Frame &frame_curr, LoaclMap &map, std::vecto
     g2o::VertexSE3Expmap *last_SE3 = new g2o::VertexSE3Expmap();
     last_SE3->setEstimate(Converter::toSE3Quat(last_Tcw));
     last_SE3->setId(frame_id_last);
-    if (frame_id_last == 0)
-    {
-        last_SE3->setFixed(true);
+
+    last_SE3->setFixed(true);
         //std::cout<<" fixed last_SE3" <<std::endl;
-    }
-    else
-    {
-        last_SE3->setFixed(false);
-    }
     optimizer.addVertex(last_SE3);
 
     g2o::VertexSE3Expmap *curr_SE3 = new g2o::VertexSE3Expmap();
     curr_SE3->setEstimate(Converter::toSE3Quat(curr_Tcw));
     curr_SE3->setId(frame_id_curr);
-    if (frame_id_curr == 0)
-    {
-        curr_SE3->setFixed(true);
-        //std::cout<<" fixed last_SE3" <<std::endl;
-    }
-    else
-    {
-        curr_SE3->setFixed(false);
-    }
+    curr_SE3->setFixed(false);
+
     optimizer.addVertex(curr_SE3);
 
     const float thHuber2D = sqrt(5.99);

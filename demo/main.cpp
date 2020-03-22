@@ -13,6 +13,7 @@
 #include "utils.h"
 #include "two_view_geometry.h"
 #include "optimizer.h"
+#include <time.h>
 
 void detectFeatures(const Eigen::Matrix4d &Twc, const Eigen::Matrix3d &K,
                     const std::vector<Eigen::Vector3d> &landmarks, const std::vector<Eigen::Vector3d> &normals,
@@ -114,6 +115,7 @@ void outlier_rejection(Frame &frame_last,Frame &frame_curr, LoaclMap &map, std::
 
         if (mpt_idx < 0) { continue; }
         Eigen::Vector3d &mpt = map.mpts_[mpt_idx];
+        continue;
         // TODO homework
         // if (...)
         // {
@@ -379,6 +381,8 @@ int main()
 
     bool init_flag = false;
     LoaclMap map(landmarks.size());
+    clock_t start,ends;
+    start=clock();
     for (size_t i = 1; i < pose_num; i++)
     {
         //std::cout<<" ===============> pose_num:  "<<i<<std::endl;
@@ -635,7 +639,8 @@ int main()
         window.spinOnce(10, true);
         // window.spin();
     }
-
+    ends=clock();
+    std::cout<<"Time cost:" <<ends-start<<" ms"<<std::endl;
     /* save trajectory for evalution */
     saveTrajectoryTUM("frame_traj_gt.txt", pose_gt);
     saveTrajectoryTUM("frame_traj_est.txt", pose_est);
